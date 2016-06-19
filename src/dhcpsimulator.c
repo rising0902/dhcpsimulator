@@ -7,253 +7,185 @@
  Description : Hello World in C, Ansi-style
  ============================================================================
  */
-#define MAC 12
+#define DEBUG
+#ifdef DEBUG
+#define trace printf
+#else
+#define trace 1 ? (void) 0 : printf
+#endif
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/types.h>
 #include <winsock2.h>
 
-struct DHCPHeader {
-	/// Message op code / message type. 1 = BOOTREQUEST, 2 = BOOTREPLY
-	byte op;
-
-	/// Hardware address type, see ARP section in "Assigned Numbers" RFC; e.g., '1' = 10mb ethernet.
-	byte htype;
-
-	/// Hardware address length (e.g.  '6' for 10mb ethernet).
-	byte hlen;
-
-	/// Client sets to zero, optionally used by relay agents when booting via a relay agent.
-	byte hops;
-
-	/// Transaction ID, a random number chosen by the client, used by the client and server to associate messages and responses between a client and a server.
-	int xid;
-
-	/// Filled in by client, seconds elapsed since client began address acquisition or renewal process.
-	short secs;
-
-	/// Flags. (Only the BROADCAST flag is defined.)
-	short flags;
-
-	/// Client IP address; only filled in if client is in BOUND, RENEW or REBINDING state and can respond to ARP requests.
-	int ciaddr;
-
-	/// 'your' (client) IP address.
-	int yiaddr;
-
-	/// IP address of next server to use in bootstrap; returned in DHCPOFFER, DHCPACK by server.
-	int siaddr;
-
-	/// Relay agent IP address, used in booting via a relay agent.
-	int giaddr;
-
-	/// Client hardware address.
-	byte chaddr[16];
-
-	/// Optional server host name, null terminated string.
-	char sname[64];
-
-	/// Boot file name, null terminated string; "generic" name or null in DHCPDISCOVER, fully qualified directory-path name in DHCPOFFER.
-	char file[128];
-};
-
-struct DHCPOption{
-	byte type;
-	byte data[1];
-};
-
-struct DHCPMessage {
-	struct DHCPHeader header;
-	struct DHCPOption options[1];
-};
-
-enum DHCPOptionType
-{
-	subnetMask = 1,
-	timeOffset = 2,
-	router = 3,
-	timeServer = 4,
-	nameServer = 5,
-	domainNameServer = 6,
-	domainName = 15,
-	broadcastServerOption = 28,
-	netbiosNodeType = 46,
-	leaseTime = 51,
-	dhcpMessageType = 53,
-	serverIdentifier = 54,
-	parameterRequestList = 55,
-	renewalTime = 58,
-	rebindingTime = 59,
-	vendorClassIdentifier = 60,
-	tftpServerName = 66,
-	bootfileName = 67,
-};
-
-enum DHCPMessageType
-{
-	discover = 1,
-	offer,
-	request,
-	decline,
-	ack,
-	nak,
-	release,
-	inform
-};
-
-enum NETBIOSNodeType
-{
-	bNode = 1,
-	pNode,
-	mMode,
-	hNode
-};
-
-void toString(unsigned char *data) {
-	int i;
-	for (i=0; i<16; i++) {
-		printf("%02x", data[i]);
-	}
-	printf("\n");
-}
+#include "dhcp.h"
 
 void parseMac(unsigned char *data, const char *mac) {
-	int i;
-	printf("string:%s\n", mac);
+    int i;
+    printf("string:%s\n", mac);
 
-	int len = (int)strlen(mac);
-	for (i=0; i<len; i+=2) {
-		unsigned int x;
-		sscanf((char *)(mac + i), "%02x", &x);
-		data[i/2] = x;
-	}
-	for (i=len/2; i<16; ++i) {
-		data[i] = (byte)0;
-	}
+    int len = (int) strlen(mac);
+    for (i = 0; i < len; i += 2) {
+        unsigned int x;
+        sscanf((char *) (mac + i), "%02x", &x);
+        data[i / 2] = x;
+    }
+    for (i = len / 2; i < 16; ++i) {
+        data[i] = (byte) 0;
+    }
+}
 
-	toString(data);
+int sendDiscoverMessage() {
+    struct WSAData wsaData;
+    SOCKET sock;
+    struct sockaddr_in addr;
+    BOOL yes = 1;
+
+    char *message;
+    message = (char *) malloc(sizeof(char) * (244));
+    if (message == NULL)
+        exit(EXIT_FAILURE);
+
+    message[0] = 1;
+    message[1] = 1;
+    message[2] = 6;
+    message[3] = 0;
+    message[4] = (int) 1;
+    message[8] = 0;
+    message[9] = 0;
+    message[10] = htons(0x8000);
+    message[12] = 0;
+    message[13] = 0;
+    message[14] = 0;
+    message[15] = 0;
+    message[16] = 0;
+    message[17] = 0;
+    message[18] = 0;
+    message[19] = 0;
+    message[20] = 0;
+    message[21] = 0;
+    message[22] = 0;
+    message[23] = 0;
+    message[24] = 0;
+    message[25] = 0;
+    message[26] = 0;
+    message[27] = 0;
+    message[28] = 1;
+    message[29] = 2;
+    message[30] = 3;
+    message[31] = 4;
+    message[32] = 5;
+    message[33] = 6;
+    message[34] = 0;
+    message[35] = 0;
+    message[36] = 0;
+    message[37] = 0;
+    message[38] = 0;
+    message[39] = 0;
+    message[40] = 0;
+    message[41] = 0;
+    message[42] = 0;
+    message[43] = 0;
+    int i;
+    for (i = 0; i < 64; i++) {
+        message[44 + i] = 0;
+    }
+    for (i = 0; i < 128; i++) {
+        message[108 + i] = 0;
+    }
+    message[236] = 99;
+    message[237] = 130;
+    message[238] = 83;
+    message[239] = 99;
+    message[240] = (char) dhcpMessageType;
+    message[241] = 1;
+    message[242] = 1;
+    message[243] = 0xff;
+
+    WSAStartup(MAKEWORD(2, 0), &wsaData);
+
+    sock = socket(AF_INET, SOCK_DGRAM, 0);
+
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(67);
+    addr.sin_addr.S_un.S_addr = inet_addr("192.168.215.255");
+
+    setsockopt(sock, SOL_SOCKET, SO_BROADCAST, (char *) &yes, sizeof(yes));
+
+    sendto(sock, message, 244, 0, (struct sockaddr *) &addr, sizeof(addr));
+
+    closesocket(sock);
+
+    WSACleanup();
+    free(message);
+    return EXIT_SUCCESS;
+}
+
+int checkAscii(int c) {
+    return c >= ' ' && c <= '\~';
+}
+
+void dump(int len, char response[]) {
+    printf("Received: [%d]\n", len);
+    int i, j;
+    char *psz = "%02x ";
+    for (j = 0; j < len; j++) {
+        printf("[%03x]  : ", j);
+        for (i = 0; i < 16; i++) {
+            //          if (recvString[j + i] != -1)
+            printf(psz, response[j + i] & 0x000000FF);
+        }
+        printf("   ");
+        for (i = 0; i < 16; i++)
+            (checkAscii(response[j + i]) == 0 && (*(response + j + i) = '.')), putchar(response[j + i]);
+        printf("\n");
+        j = j + 15;
+    }
 }
 
 int main(void) {
-	int i;
-	byte data[16];
-	char mac[] = "000102030405";
-	short j;
-	printf("int = %d | i = %d\ndouble = %d\n%0" , sizeof(int) , sizeof j , sizeof(double), htons(0x8000));
-	parseMac(data, mac);
 
-	struct DHCPHeader header = {(byte)1, (byte)1, (byte)6, (byte)0, (int)1, (short)0, htons(0x8000), (int)0, (int)0, (int)0, (int)0, data, (byte)0, (byte)0};
-	byte values[1] = {(byte)1};
-	struct DHCPOption option[1] = { (byte)53, values};
-	struct DHCPMessage dHCPMessage = {header, option};
+    struct WSAData wsaData;
+    SOCKET sock;
+    struct sockaddr_in broadcastAddr;
+    char recvString[2048];
+    int recvStringLen;
+    unsigned long nonblocking = 1;
 
-	int *heap;
-	heap = (byte *)malloc(sizeof(byte) * (238 + 3));
-	if (heap == NULL) exit(EXIT_FAILURE);
+    WSAStartup(MAKEWORD(2, 0), &wsaData);
 
-	heap[0] = header.op;
-	heap[1] = header.htype;
-	heap[2] = header.hlen;
-	heap[3] = header.hops;
-	heap[4] = header.xid;
-	heap[8] = header.secs;
-	heap[10] = header.flags;
-	heap[12] = header.ciaddr;
-	heap[16] = header.yiaddr;
-	heap[20] = header.siaddr;
-	heap[24] = header.giaddr;
-	for (i = 0; i < sizeof(header.chaddr); i++) {
-		heap[27+i] = header.chaddr[i];
-	}
-	//heap[27] = header.chaddr;
-	for (i = 0; i < sizeof(header.sname); i++) {
-		heap[43+i] = header.sname[i];
-	}
-	//heap[43] = header.sname;
-	for (i = 0; i < sizeof(header.file); i++) {
-		heap[107+i] = header.file[i];
-	}
-	//heap[107] = header.file;
-	heap[235] = (byte)99;
-	heap[236] = (byte)130;
-	heap[237] = (byte)83;
-	heap[238] = (byte)99;
-	heap[239] = (byte)53;
-	heap[240] = (byte)1;
-	heap[241] = (byte)1;
+    sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
 
-	struct WSAData wsaData;
-	SOCKET sock;
-	struct sockaddr_in addr;
-	BOOL yes = 1;
-	struct sockaddr_in broadcastAddr;
-	char recvString[2048];
-	int recvStringLen;
-	char buf[2048];
-	unsigned long nonblocking = 1;
+    ioctlsocket(sock, FIONBIO, &nonblocking);
+    memset(&broadcastAddr, 0, sizeof(broadcastAddr));
+    broadcastAddr.sin_family = AF_INET;
+    broadcastAddr.sin_addr.s_addr = htonl(INADDR_ANY);
+    broadcastAddr.sin_port = htons(68);
 
-	WSAStartup(MAKEWORD(2,0), &wsaData);
+    bind(sock, (struct sockaddr *) &broadcastAddr, sizeof(broadcastAddr));
 
-	sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    sendDiscoverMessage();
+    for (;;) {
+        if ((recvStringLen = recv(sock, recvString, 2048, 0)) < 0) {
+            if (WSAGetLastError() != WSAEWOULDBLOCK) {
+                return EXIT_FAILURE;
+            } else {
+                printf(
+                        "Still have not received packet...Waiting and then trying again\n");
+                Sleep(2000);
+            }
+        } else
+            break;
+    }
+    recvString[recvStringLen] = '\0';
 
-	addr.sin_family = AF_INET;
-	addr.sin_port = htons(68);
-	addr.sin_addr.S_un.S_addr = INADDR_ANY;
+#ifdef DEBUG
+    dump(recvStringLen, recvString);
+#endif
 
-	//setsockopt(sock, SOL_SOCKET, SO_BROADCAST, (char *)&yes, sizeof(yes));
-	//bind(sock, (struct sockaddr *)&addr, sizeof(addr));
-	ioctlsocket(sock, FIONBIO, &nonblocking);
-	memset(&broadcastAddr, 0, sizeof(broadcastAddr));
-	broadcastAddr.sin_family = AF_INET;
-	broadcastAddr.sin_addr.s_addr = htonl(INADDR_ANY);
-	broadcastAddr.sin_port = htons(68);
-	//memset(buf, 0, sizeof(buf));
-	//recv(sock, buf, sizeof(buf), 0);
-	bind(sock, (struct sockaddr *) &broadcastAddr, sizeof(broadcastAddr));
+    closesocket(sock);
+    WSACleanup();
 
-	for (;;)
-	{
-		if ((recvStringLen = recvfrom(sock, recvString, 2048, 0, NULL, 0)) < 0)
-		{
-			if (WSAGetLastError() != WSAEWOULDBLOCK) {
-				return EXIT_FAILURE;
-			} else {
-				printf("Still have not received packet...Waiting and then trying again\n");
-				Sleep(2000);  /* Sleep for 2 milliseconds */
-			}
-		}
-		else
-			break;
-	}
-	recvString[recvStringLen] = '\0';
-	printf("Received: %s\n", recvString);
-	closesocket(sock);
-	WSACleanup();
-	//printf("---------------------------\n");
-	//printf("%s\n", buf);
-	//printf("---------------------------\n");
-
-	//closesocket(sock);
-
-	//WSACleanup();
-	/*
-	WSAStartup(MAKEWORD(2,0), &wsaData);
-
-	sock = socket(AF_INET, SOCK_DGRAM, 0);
-
-	addr.sin_family = AF_INET;
-	addr.sin_port = htons(67);
-	addr.sin_addr.S_un.S_addr = inet_addr("192.168.215.255");
-
-	setsockopt(sock, SOL_SOCKET, SO_BROADCAST, (char *)&yes, sizeof(yes));
-
-	sendto(sock, heap, 237, 0, (struct sockaddr *)&addr, sizeof(addr));
-
-	closesocket(sock);
-
-	WSACleanup();
-	free(heap);
-	printf("exit success\n");*/
-	return EXIT_SUCCESS;
+    return EXIT_SUCCESS;
 }
